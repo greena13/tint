@@ -1,6 +1,6 @@
 module Tint
   class << self
-    attr_accessor :camelize_attribute_names
+    attr_accessor :attribute_capitalization
 
     def configuration
       if block_given?

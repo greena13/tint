@@ -46,7 +46,7 @@ module Tint
 
     def attributes_for_json
       strategy =
-        case Tint.camelize_attribute_names
+        case Tint.attribute_capitalization
         when :camel_case
           AttributeNameStrategy::Camelize
         when :snake_case

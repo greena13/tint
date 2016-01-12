@@ -18,7 +18,21 @@ module Tint
     end
 
     class << self
-      attr_accessor :_attributes, :eager_loads
+      attr_accessor :_attributes
+
+      def eager_loads
+        []
+      end
+
+      def eager_loads=(value)
+        singleton_class.class_eval do
+          remove_possible_method(:eager_loads)
+
+          define_method(:eager_loads){
+            value
+          }
+        end
+      end
 
       def attributes(*options)
         @_attributes ||= Set.new
@@ -36,10 +50,13 @@ module Tint
 
       def eager_load(*schema)
         @_attributes ||= Set.new
-        @eager_loads ||= []
 
-        schema.each do |schema_item|
-          @eager_loads.push(schema_item)
+        if schema.kind_of?(Array)
+          schema.each do |schema_item|
+            self.eager_loads = self.eager_loads + [schema_item]
+          end
+        else
+          self.eager_loads = self.eager_loads + [schema]
         end
       end
 

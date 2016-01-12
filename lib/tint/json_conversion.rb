@@ -45,6 +45,10 @@ module Tint
     end
 
     def attributes_for_json
+      attribute_list = self.class._attributes
+
+      return {} if attribute_list.blank?
+
       strategy =
         case Tint.attribute_capitalization
         when :camel_case
@@ -57,7 +61,7 @@ module Tint
           AttributeNameStrategy::Stringify
         end
 
-      self.class._attributes.inject({}) do |memo, key_and_value|
+      attribute_list.inject({}) do |memo, key_and_value|
         key, _ = key_and_value
 
         unless (value = self.send(key)).nil?

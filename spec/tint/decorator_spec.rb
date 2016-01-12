@@ -16,6 +16,18 @@ RSpec.describe Tint::Decorator do
 
   let(:object) { object_class.new('one', 'two') }
 
+  context "when not attributes have been set" do
+    let(:decorator_class) do
+      Class.new(Tint::Decorator) do
+
+      end
+    end
+
+    it "returns an empty object", focus: true do
+      expect(subject).to eql({})
+    end
+  end
+
   describe "::attributes" do
     context "when only delegations are defined" do
       let(:decorator_class) do

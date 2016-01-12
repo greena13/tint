@@ -148,7 +148,9 @@ module Tint
 
           unless method_defined?(delegate_method)
             define_method(delegate_method) do
-              object.send(delegate_method)
+              if object.respond_to?(delegate_method)
+                object.send(delegate_method)
+              end
             end
           end
         end
@@ -159,12 +161,14 @@ module Tint
           @_attributes.add(decorator_attribute)
 
           define_method(decorator_attribute) do
-            object.send(object_method)
+            if object.respond_to?(object_method)
+              object.send(object_method)
+            end
           end
         end
       end
     end
 
-
   end
+
 end

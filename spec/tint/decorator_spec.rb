@@ -29,16 +29,31 @@ RSpec.describe Tint::Decorator do
   end
 
   describe "::attributes" do
+    context "when an broken reference is used" do
+      let(:decorator_class) do
+        Class.new(Tint::Decorator) do
+          attributes :broken_reference
+        end
+      end
+
+      it "does not include it in the object" do
+        expect(subject).to eql({})
+      end
+    end
+
     context "when only delegations are defined" do
       let(:decorator_class) do
         Class.new(Tint::Decorator) do
-          attributes :attr1, :attr2
+          attributes :attr1
         end
       end
 
       it "delegates attributes of the same name to the object" do
         expect(subject['attr1']).to eql('one')
-        expect(subject['attr2']).to eql('two')
+      end
+
+      it "does not include any attributes not mentioned" do
+        expect(subject['attr2']).to be_nil
       end
     end
 
@@ -118,7 +133,7 @@ RSpec.describe Tint::Decorator do
       end
     end
 
-    context "when a with option is provided" do
+    context "when a :with option is provided" do
       let(:explicitly_referenced_decorator) do
         Class.new(Tint::Decorator) do
           attributes decorated1: :attr1

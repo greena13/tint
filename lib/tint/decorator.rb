@@ -46,13 +46,27 @@ module Tint
       def decorates_association(association_name, options = {})
         options[:with] ||= (association_name.to_s.camelize.singularize + 'Decorator').constantize
 
-        super(association_name, options)
+        association_alias = options.delete(:as)
 
-        attributes(association_name)
+        if association_alias
+          options.assert_valid_keys(:with, :scope, :context)
+
+          define_method(association_alias) do
+            decorated_associations[association_alias] ||= Draper::DecoratedAssociation.new(self, association_name, options)
+            decorated_associations[association_alias].call
+          end
+
+          attributes(association_alias)
+        else
+          super(association_name, options)
+
+          attributes(association_name)
+        end
+
         association_eager_loads = options[:with].eager_loads
 
         if association_eager_loads.present?
-          eager_load({ association_name =>  association_eager_loads})
+          eager_load({ association_name => association_eager_loads})
         else
           eager_load(association_name)
         end

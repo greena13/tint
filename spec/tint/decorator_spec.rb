@@ -131,6 +131,33 @@ RSpec.describe Tint::Decorator do
         Object.send(:remove_const, 'ExplicitlyReferencedDecorator')
       end
     end
+
+    context "when a :as option is provided" do
+
+      let(:associated_decorator) do
+        Class.new(Tint::Decorator) do
+          attributes :attr1
+        end
+      end
+
+      let(:decorator_class) do
+        Class.new(Tint::Decorator) do
+          decorates_association :associated, as: 'related'
+        end
+      end
+
+      before(:each) do
+        Object.const_set('AssociatedDecorator', associated_decorator)
+      end
+
+      it "uses the specified decorator" do
+        expect(subject['related']['attr1']).to eql('value')
+      end
+
+      after(:each) do
+        Object.send(:remove_const, 'AssociatedDecorator')
+      end
+    end
   end
 
   describe "::eager_load" do

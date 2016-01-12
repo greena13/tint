@@ -90,6 +90,12 @@ By default, `decorates_association` uses the name of the association to guess th
 decorates_association :product, with: SpecialProductDecorator
 ```
 
+You can decorate an association and make it available under a different name using the `as` option:
+
+```ruby
+decorates_association :product, as: :sale_item
+```
+
 Multiple associations can be defined in the same statement using `decorates_associations`. Either, using interpolation to locate the correct decorator for each:
 
 ```ruby

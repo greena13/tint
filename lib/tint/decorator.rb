@@ -1,4 +1,5 @@
 require 'draper'
+require 'deep_merge/rails_compat'
 require_relative 'json_conversion.rb'
 
 module Tint
@@ -6,7 +7,9 @@ module Tint
     include JsonConversion
 
     def initialize(object, options = {})
-      super(object, options)
+      super(object, options.except(:parent_decorator, :parent_association))
+
+      @context = @context.merge(options.slice(:parent_decorator, :parent_association))
     end
 
     def column_names
@@ -17,11 +20,28 @@ module Tint
       object.persisted?
     end
 
+    def decorate_as_association(association_name, association, options = {})
+      options.assert_valid_keys(:with)
+
+      association_decorator = options[:with]
+
+      association_context = options.except(:with).merge(context: context.
+          merge(parent_decorator: self, parent_association: association_name.to_sym))
+
+      self.class.eager_load(association_name => {})
+
+      if association.respond_to?(:each)
+        association_decorator.decorate_collection(association, association_context)
+      else
+        association_decorator.decorate(association, association_context)
+      end
+    end
+
     class << self
-      attr_accessor :_attributes
+      attr_accessor :_attributes, :parent_decorator, :parent_association
 
       def eager_loads
-        []
+        {}
       end
 
       def eager_loads=(value)
@@ -49,36 +69,43 @@ module Tint
       end
 
       def eager_load(*schema)
-        @_attributes ||= Set.new
+        new_eager_loads =
+          schema.inject({}) do |memo, schema_item|
+            if schema_item.kind_of?(Hash)
+              memo = memo.merge(schema_item)
+            else
+              memo[schema_item] = {}
+            end
 
-        if schema.kind_of?(Array)
-          schema.each do |schema_item|
-            self.eager_loads = self.eager_loads + [schema_item]
+            memo
           end
-        else
-          self.eager_loads = self.eager_loads + [schema]
-        end
+
+        self.eager_loads = self.eager_loads.deeper_merge(new_eager_loads)
       end
 
       def decorates_association(association_name, options = {})
         options[:with] ||= (association_name.to_s.camelize.singularize + 'Decorator').constantize
 
-        association_alias = options.delete(:as)
+        association_alias = options.delete(:as) || association_name
 
-        if association_alias
-          options.assert_valid_keys(:with, :scope, :context)
+        options.assert_valid_keys(:with, :scope, :context)
 
-          define_method(association_alias) do
-            decorated_associations[association_alias] ||= Draper::DecoratedAssociation.new(self, association_name, options)
-            decorated_associations[association_alias].call
-          end
+        define_method(association_alias) do
+          context_with_association = context.merge({
+              parent_decorator: self,
+              parent_association: association_name
+          })
 
-          attributes(association_alias)
-        else
-          super(association_name, options)
+          decorated_associations[association_alias] ||= Draper::DecoratedAssociation.new(
+              self,
+              association_name,
+              options.merge(context: context_with_association)
+          )
 
-          attributes(association_name)
+          decorated_associations[association_alias].call
         end
+
+        attributes(association_alias)
 
         association_eager_loads = options[:with].eager_loads
 
@@ -90,6 +117,7 @@ module Tint
       end
 
       def decorates_associations(*arguments)
+
         options = arguments.extract_options!
         association_list = arguments
 
@@ -99,12 +127,16 @@ module Tint
       end
 
       def decorate_collection(collection, options = {})
+
         collection_with_eager_loads =
-            if collection.respond_to?(:includes) && eager_loads.present?
-              collection.includes(*eager_loads)
-            else
-              collection
-            end
+          if collection.respond_to?(:includes) &&
+            eager_loads.present?  &&
+             !parent_eager_loads_include_own?(options[:context])
+
+            collection.includes(eager_loads)
+          else
+            collection
+          end
 
         super(collection_with_eager_loads, options)
       end
@@ -124,7 +156,9 @@ module Tint
         super(object, options)
       end
 
-      private
+      def parent_eager_loads_include_own?(context = {})
+        !!(context && context[:parent_decorator] && context[:parent_decorator].class.eager_loads[context[:parent_association]])
+      end
 
       def already_eager_loaded_associations?(object)
         if object.respond_to?(:association_cache)

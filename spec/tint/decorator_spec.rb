@@ -1,6 +1,8 @@
 require 'tint'
 require_relative '../support/active_record_mock'
 
+require 'spec_helper'
+
 RSpec.describe Tint::Decorator do
   subject{ decorator_class.decorate(object).as_json }
 
@@ -23,7 +25,7 @@ RSpec.describe Tint::Decorator do
       end
     end
 
-    it "returns an empty object", focus: true do
+    it "returns an empty object" do
       expect(subject).to eql({})
     end
   end
@@ -209,4 +211,119 @@ RSpec.describe Tint::Decorator do
       end
     end
   end
+
+  describe "::parent_eager_loads_include_own?" do
+    let(:decorator_class) do
+      Class.new(Tint::Decorator) do
+        eager_load :products
+      end
+    end
+
+    before(:each) do
+      Object.const_set('AssociatedDecorator', decorator_class)
+    end
+
+    context "when the decorator has no parent" do
+      let(:parent_decorator_class) { nil }
+
+      it "returns false" do
+        expect(decorator_class.parent_eager_loads_include_own?).to eql(false)
+      end
+    end
+
+    context "when the decorator has a parent set via decorates_association" do
+      let(:parent_decorator_class) do
+        Class.new(Tint::Decorator) do
+          decorates_association :associated
+        end
+      end
+
+      it "returns true" do
+        context = {
+            parent_decorator: parent_decorator_class.decorate(object_class),
+            parent_association: :associated
+        }
+
+        expect(decorator_class.parent_eager_loads_include_own?(context)).to eql(true)
+      end
+    end
+
+    context "when a decorator has a parent set via #decorate_association" do
+      let(:parent_decorator_class) do
+        Class.new(Tint::Decorator) do
+          attributes :associated
+
+          def associated
+            decorate_as_association(:association, object, with: AssociatedDecorator)
+          end
+
+        end
+      end
+
+      it "returns true" do
+        decorated_class = parent_decorator_class.decorate(object_class.new('foo', 'bar'))
+
+        context = decorated_class.send(:associated).context
+        expect(decorator_class.parent_eager_loads_include_own?(context)).to eql(true)
+      end
+    end
+
+    context "when a decorator has a parent manually set" do
+      context "and the parent doesn't manually eager load the association" do
+        let(:parent_decorator_class) do
+          Class.new(Tint::Decorator) do
+            attributes :associated
+
+            def associated
+              AssociatedDecorator.decorate(object, context: {
+                  parent_decorator: self,
+                  parent_association: :associated
+              })
+            end
+
+          end
+
+        end
+
+        it "returns false" do
+          decorated_class = parent_decorator_class.decorate(object_class.new('foo', 'bar'))
+
+          context = decorated_class.send(:associated).context
+          expect(decorator_class.parent_eager_loads_include_own?(context)).to eql(false)
+        end
+      end
+
+      context "and the parent manually loads the eager association" do
+        let(:parent_decorator_class) do
+          Class.new(Tint::Decorator) do
+            attributes :associated
+
+            eager_load :associated
+
+            def associated
+              AssociatedDecorator.decorate(object, context: {
+                  parent_decorator: self,
+                  parent_association: :associated
+              })
+            end
+
+          end
+
+        end
+
+        it "returns true" do
+          decorated_class = parent_decorator_class.decorate(object_class.new('foo', 'bar'))
+
+          context = decorated_class.send(:associated).context
+          expect(decorator_class.parent_eager_loads_include_own?(context)).to eql(true)
+        end
+      end
+    end
+
+    after(:each) do
+      Object.send(:remove_const, 'AssociatedDecorator')
+    end
+  end
+
+
 end

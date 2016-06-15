@@ -2,6 +2,8 @@ require 'draper'
 require 'deep_merge/rails_compat'
 require_relative 'json_conversion.rb'
 
+require 'tint/decorated_association'
+
 module Tint
   class Decorator < Draper::Decorator
     include JsonConversion
@@ -18,23 +20,6 @@ module Tint
 
     def persisted?
       object.persisted?
-    end
-
-    def decorate_as_association(association_name, association, options = {})
-      options.assert_valid_keys(:with)
-
-      association_decorator = options[:with]
-
-      association_context = options.except(:with).merge(context: context.
-          merge(parent_decorator: self, parent_association: association_name.to_sym))
-
-      self.class.eager_load(association_name => {})
-
-      if association.respond_to?(:each)
-        association_decorator.decorate_collection(association, association_context)
-      else
-        association_decorator.decorate(association, association_context)
-      end
     end
 
     class << self
@@ -69,51 +54,24 @@ module Tint
       end
 
       def eager_load(*schema)
-        new_eager_loads =
-          schema.inject({}) do |memo, schema_item|
-            if schema_item.kind_of?(Hash)
-              memo = memo.merge(schema_item)
-            else
-              memo[schema_item] = {}
-            end
-
-            memo
-          end
-
-        self.eager_loads = self.eager_loads.deeper_merge(new_eager_loads)
+        self.eager_loads = self.eager_loads.deeper_merge(expand_schema(schema))
       end
 
-      def decorates_association(association_name, options = {})
-        options[:with] ||= (association_name.to_s.camelize.singularize + 'Decorator').constantize
+      def decorates_association(*args)
+        options = args.extract_options!
+        association_chain = args
 
-        association_alias = options.delete(:as) || association_name
+        association_tail = association_chain.last
+
+        options[:with] ||= (association_tail.to_s.camelize.singularize + 'Decorator').constantize
+
+        association_alias = options.delete(:as) || association_tail
 
         options.assert_valid_keys(:with, :scope, :context)
 
-        define_method(association_alias) do
-          context_with_association = context.merge({
-              parent_decorator: self,
-              parent_association: association_name
-          })
+        define_association_method(association_alias, association_chain, options)
 
-          decorated_associations[association_alias] ||= Draper::DecoratedAssociation.new(
-              self,
-              association_name,
-              options.merge(context: context_with_association)
-          )
-
-          decorated_associations[association_alias].call
-        end
-
-        attributes(association_alias)
-
-        association_eager_loads = options[:with].eager_loads
-
-        if association_eager_loads.present?
-          eager_load({ association_name => association_eager_loads})
-        else
-          eager_load(association_name)
-        end
+        eager_load_association(association_chain, options)
       end
 
       def decorates_associations(*arguments)
@@ -147,7 +105,7 @@ module Tint
         unless already_eager_loaded_associations?(object)
           object =
               if responds_to_methods?(object_class, :includes, :find) && eager_loads.present?
-                object_class.includes(*eager_loads).find(object.id)
+                object_class.includes(eager_loads).find(object.id)
               else
                 object
               end
@@ -157,7 +115,15 @@ module Tint
       end
 
       def parent_eager_loads_include_own?(context = {})
-        !!(context && context[:parent_decorator] && context[:parent_decorator].class.eager_loads[context[:parent_association]])
+        if context && context[:parent_decorator]
+          if (parent_eager_loads = context[:parent_decorator].class.eager_loads)
+            context[:parent_association].inject(parent_eager_loads) do |memo, chain_link|
+              memo[chain_link] if memo
+            end
+          end
+        else
+          false
+        end
       end
 
       def already_eager_loaded_associations?(object)
@@ -198,6 +164,60 @@ module Tint
             if object.respond_to?(object_method)
               object.send(object_method)
             end
+          end
+        end
+      end
+
+      private
+
+      def expand_schema(schema)
+        if schema.kind_of?(Hash)
+          schema.inject({}) do |memo, (schema_key, schema_value)|
+            memo[schema_key] = expand_schema(schema_value)
+            memo
+          end
+        elsif schema.kind_of?(Array)
+          schema.inject({}) do |memo, schema_item|
+            memo.merge(expand_schema(schema_item))
+          end
+        else
+          { schema => {} }
+        end
+      end
+
+      def define_association_method(association_alias, association_chain, options)
+        define_method(association_alias) do
+          context_with_association = context.merge({
+                                                       parent_decorator: self,
+                                                       parent_association: association_chain
+                                                   })
+
+          decorated_associations[association_alias] ||= Tint::DecoratedAssociation.new(
+              self,
+              association_chain,
+              options.merge(context: context_with_association)
+          )
+
+          decorated_associations[association_alias].call
+        end
+
+        attributes(association_alias)
+      end
+
+      def eager_load_association(association_chain, options)
+        association_eager_loads = options[:with].eager_loads
+        schema = association_schema(association_chain, association_eager_loads)
+
+        eager_load(schema)
+      end
+
+      def association_schema(association_chain, eager_loads = {})
+        association_chain.reverse.reduce({}) do |memo, chain_link|
+
+          if chain_link == association_chain.last
+            { chain_link => eager_loads }
+          else
+            { chain_link => memo }
           end
         end
       end

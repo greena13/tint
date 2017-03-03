@@ -115,11 +115,16 @@ module Tint
       end
 
       def parent_eager_loads_include_own?(context = {})
+
         if context && context[:parent_decorator]
           if (parent_eager_loads = context[:parent_decorator].class.eager_loads)
-            context[:parent_association].inject(parent_eager_loads) do |memo, chain_link|
-              memo[chain_link] if memo
-            end
+
+            association_eager_load =
+              context[:parent_association].inject(parent_eager_loads) do |memo, chain_link|
+                memo[chain_link] if memo
+              end
+
+            !!association_eager_load
           end
         else
           false
@@ -188,9 +193,9 @@ module Tint
       def define_association_method(association_alias, association_chain, options)
         define_method(association_alias) do
           context_with_association = context.merge({
-                                                       parent_decorator: self,
-                                                       parent_association: association_chain
-                                                   })
+               parent_decorator: self,
+               parent_association: association_chain
+           })
 
           decorated_associations[association_alias] ||= Tint::DecoratedAssociation.new(
               self,

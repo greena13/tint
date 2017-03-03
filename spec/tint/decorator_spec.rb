@@ -194,9 +194,9 @@ RSpec.describe Tint::Decorator do
 
       eager_load_schemas = [
           [:associated],
-          [ { associated1: [:associated2] } ],
-          [ { associated1: { associated2: [:associated3] } } ],
-          [ :associated1, { associated2: [:associated3] } ]
+          [ { associated1: { associated2: {} } } ],
+          [ { associated1: { associated2: { associated3: {} } } } ],
+          [ :associated1, { associated2: { associated3: {} } } ]
       ]
 
       eager_load_schemas.each do |eager_load_schema|
@@ -241,29 +241,9 @@ RSpec.describe Tint::Decorator do
       it "returns true" do
         context = {
             parent_decorator: parent_decorator_class.decorate(object_class),
-            parent_association: :associated
+            parent_association: [:associated]
         }
 
-        expect(decorator_class.parent_eager_loads_include_own?(context)).to eql(true)
-      end
-    end
-
-    context "when a decorator has a parent set via #decorate_association" do
-      let(:parent_decorator_class) do
-        Class.new(Tint::Decorator) do
-          attributes :associated
-
-          def associated
-            decorate_as_association(:association, object, with: AssociatedDecorator)
-          end
-
-        end
-      end
-
-      it "returns true" do
-        decorated_class = parent_decorator_class.decorate(object_class.new('foo', 'bar'))
-
-        context = decorated_class.send(:associated).context
         expect(decorator_class.parent_eager_loads_include_own?(context)).to eql(true)
       end
     end
@@ -277,7 +257,7 @@ RSpec.describe Tint::Decorator do
             def associated
               AssociatedDecorator.decorate(object, context: {
                   parent_decorator: self,
-                  parent_association: :associated
+                  parent_association: [:associated]
               })
             end
 
@@ -301,9 +281,9 @@ RSpec.describe Tint::Decorator do
             eager_load :associated
 
             def associated
-              AssociatedDecorator.decorate(object, context: {
+              AssociatedDecorator.decorate(object.attr1, context: {
                   parent_decorator: self,
-                  parent_association: :associated
+                  parent_association: [:associated]
               })
             end
 
@@ -312,9 +292,14 @@ RSpec.describe Tint::Decorator do
         end
 
         it "returns true" do
-          decorated_class = parent_decorator_class.decorate(object_class.new('foo', 'bar'))
+          associated_object = object_class.new('foo', 'bar')
 
-          context = decorated_class.send(:associated).context
+          decorated_class = parent_decorator_class.decorate(
+              object_class.new(associated_object, 'bar')
+          )
+
+          context = decorated_class.associated.context
+
           expect(decorator_class.parent_eager_loads_include_own?(context)).to eql(true)
         end
       end

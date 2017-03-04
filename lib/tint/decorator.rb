@@ -8,9 +8,11 @@ module Tint
   class Decorator < Draper::Decorator
     include JsonConversion
 
+    attr_accessor :object_attributes
+
     def initialize(object, options = {})
       super(object, options.except(:parent_decorator, :parent_association))
-
+      @object_attributes = {}
       @context = @context.merge(options.slice(:parent_decorator, :parent_association))
     end
 
@@ -23,26 +25,20 @@ module Tint
     end
 
     class << self
-      attr_accessor :_attributes, :parent_decorator, :parent_association
+      attr_accessor :_attributes, :_override_methods, :parent_decorator, :parent_association
 
       def eager_loads
-        {}
+        @_eager_loads ||= {}
       end
 
       def eager_loads=(value)
-        singleton_class.class_eval do
-          remove_possible_method(:eager_loads)
-
-          define_method(:eager_loads){
-            value
-          }
-        end
+        @_eager_loads = value
       end
 
       def attributes(*options)
         @_attributes ||= Set.new
 
-        return unless options && options.any?
+        return if options.blank?
 
         mapped_attrs = options.extract_options!
 
@@ -102,6 +98,20 @@ module Tint
       def decorate(object, options = {})
         object_class = object.class
 
+        _object_attributes =
+            if object.present? && object.respond_to?(:attributes)
+              object.attributes
+            else
+              {}
+            end
+
+        @object_attributes =
+            if _object_attributes && _object_attributes.kind_of?(Hash)
+              _object_attributes
+            else
+              {}
+            end
+
         unless already_eager_loaded_associations?(object)
           object =
               if responds_to_methods?(object_class, :includes, :find) && eager_loads.present?
@@ -148,27 +158,30 @@ module Tint
       end
 
       def link_delegations_to_object(delegated_attrs)
+        @_override_methods ||= {}
+
         delegated_attrs.each do |delegate_method|
           @_attributes.add(delegate_method)
 
-          unless method_defined?(delegate_method)
+          if method_defined?(delegate_method)
+            @_override_methods[delegate_method] = true
+          else
             define_method(delegate_method) do
-              if object.respond_to?(delegate_method)
-                object.send(delegate_method)
-              end
+              object.try(delegate_method)
             end
           end
         end
       end
 
       def link_mappings_to_object(mapped_attrs)
+        @_override_methods ||= {}
+
         mapped_attrs.each do |decorator_attribute, object_method|
           @_attributes.add(decorator_attribute)
+          @_override_methods[decorator_attribute] = true
 
           define_method(decorator_attribute) do
-            if object.respond_to?(object_method)
-              object.send(object_method)
-            end
+            @object_attributes[object_method.to_s] || object.try(object_method)
           end
         end
       end

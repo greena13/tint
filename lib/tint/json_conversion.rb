@@ -46,6 +46,7 @@ module Tint
 
     def attributes_for_json
       attribute_list = self.class._attributes
+      override_methods = self.class._override_methods
 
       return {} if attribute_list.blank?
 
@@ -61,10 +62,18 @@ module Tint
           AttributeNameStrategy::Stringify
         end
 
+
       attribute_list.inject({}) do |memo, key_and_value|
         key, _ = key_and_value
 
-        unless (value = self.send(key)).nil?
+        value =
+          if override_methods[key]
+            self.send(key)
+          else
+            self.object_attributes[key.to_s] || self.send(key)
+          end
+
+        unless value.nil?
           memo[strategy.transform(key)] = value.respond_to?(:as_json) ? value.as_json : value
         end
 

@@ -1,6 +1,6 @@
 # Tint
 
-Easily define object decorators for JSON APIs using simple declarative syntax 
+Easily define object decorators for JSON APIs using simple declarative syntax
 
 ## Installation
 
@@ -22,21 +22,44 @@ You can use Tint by creating a decorator class that inherits from `Tint::Decorat
 
 ## Defining attributes
 
-To include methods and attributes available on the decorated object, simply list them using `attributes`. 
+To include methods and attributes available on the decorated object, simply list them using `attributes`.
 
 ```ruby
 # decorators/user_decorator.rb
 class UserDecorator < Tint::Decorator
-  attributes :username, :first_name, :last_name 
+  attributes :username, :first_name, :last_name
 end
 ```
 
-You can map attributes to different names on the decorator by providing a hash as the final argument 
- 
+You can map attributes to different names on the decorator by providing a hash as the final argument
+
 ```ruby
 # decorators/user_decorator.rb
 class UserDecorator < Tint::Decorator
   attributes :username, :first_name, last_name: :surname # object.surname will be available as ['last_name']
+end
+```
+
+## Defining attributes for *_ids
+
+The `ids_for` method adds `*Ids` values to a JSON object and ensures the corresponding association is automatically eager loaded:
+
+```ruby
+class ProductDecorator < Tint::Decorator
+  attributes :id, :description, :price
+
+  ids_for :sales # will add a saleIds attribute to the JSON object
+end
+```
+
+It's possible to give the `*Ids` attribute a different name by providing the name of the association as a key-value pair:
+
+
+```ruby
+class ProductDecorator < Tint::Decorator
+  attributes :id, :description, :price
+
+  ids_for sales: :purchase_identifiers # will add a purchaseIdentifiers attribute to the JSON object
 end
 ```
 
@@ -47,9 +70,9 @@ Tint will use a decorator instance method in preference to one defined on the de
 ```ruby
 class ProductDecorator < Tint::Decorator
   attributes :id, :description, :price
-  
+
   def price
-    "$" + object.price  
+    "$" + object.price
   end
 end
 ```
@@ -59,9 +82,9 @@ It's also possible to define methods that are not available on the decorated obj
 ```ruby
 class ProductDecorator < Tint::Decorator
   attributes :id, :description, :on_sale
-  
+
   def on_sale
-    SaleItems.include?(object)  
+    SaleItems.include?(object)
   end
 end
 ```
@@ -79,13 +102,13 @@ end
 # decorators/user_decorator.rb
 class UserDecorator < Tint::Decorator
   attributes :username
-  
+
   decorates_association :products
 end
 ```
 
 By default, `decorates_association` uses the name of the association to guess the decorator it should use. In this case it will use `ProductDecorator`, but if you wished to render with `SpecialProductDecorator`, the `with` option may be used:
- 
+
 ```ruby
 decorates_association :product, with: SpecialProductDecorator
 ```
@@ -111,26 +134,26 @@ decorates_associations :previous_address, :current_address, with: AddressDecorat
 ## Eager loading associations
 
 When you declare a new association using `decorates_association` or `decorates_associations`, Tint automatically eager loads the associations when the decorator is rendered as JSON and automatically prevents many N+1 queries. It does this by maintaining a list `eager_loads` which is available on all decorators.
- 
+
 ```ruby
 class UserDecorator < Tint::Decorator
   attributes :username
-  
+
   decorates_association :products
 end
- 
- 
+
+
 UserDecorator.eager_loads # [:products]
 ```
 
 If you need to manually add to the list of associations which are eager loaded for any reason, you can do so using the `eager_load` method
- 
+
 ```ruby
 class UserDecorator < Tint::Decorator
   attributes :username
-  
+
   decorates_association :products
-  
+
   eager_load :addresses
 end
 
@@ -139,7 +162,7 @@ UserDecorator.eager_loads # [:products, :addresses]
 
 ## Decorating a single instance
 
-Tint maintains the interface defined by Draper for decorating objects. To decorate a single object, use the `decorate` method. 
+Tint maintains the interface defined by Draper for decorating objects. To decorate a single object, use the `decorate` method.
 
 Using the `UserDecorator` defined above:
 
@@ -150,16 +173,16 @@ class UsersController < ApplicationController
 
   def show
     @user = User.find(params[:id]) #<User username: "john_doe", first_name: "John", surname: "Doe">
-     
+
     render json: UserDecorator.decorate(@user) # { username: "john_doe", firstName: "John", lastName: "Doe" }
   end
-  
+
 end
 ```
 
 `decorate` also accepts an optional has of options. For more information about the supported options, see the [Draper documentation](https://github.com/drapergem/draper#adding-context).
- 
- 
+
+
 ## Decorating a collection
 
 The `decorate_collection` method is used for decorating an instance of ActiveRecord::Relation (or any class that implements the same interface). It accepts all of the same options as the `decorate` method.
@@ -171,17 +194,17 @@ class UsersController < ApplicationController
 
   def index
     @users = User.all
-     
+
     render json: UserDecorator.decorate_collection(@users) # [ { username: "john_doe", firstName: "John", lastName: "Doe" }, ... ]
   end
-  
+
 end
 ```
-    
+
 ## Configuration
 
 By default, Tint camelizes attribute names, however it's possible to configure Tint to use any of the following capitalization conventions:
-  
+
 ```ruby
 Tint.configuration do |config|
   # attribute_naMe123 ==> attributeNaMe123 (Default)

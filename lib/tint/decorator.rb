@@ -157,6 +157,34 @@ module Tint
         true
       end
 
+      def ids_for(*options)
+        mapped_attrs = options.extract_options!
+
+        attribute_options = options.map do |association_name|
+          association_method = method_name_from_association(association_name)
+          eager_load(association_name)
+          association_method
+        end
+
+        attribute_options.push(
+            mapped_attrs.inject({}) do |memo, key_and_value|
+              association_name, value = key_and_value
+              memo[value] = method_name_from_association(association_name)
+
+              eager_load(association_name)
+              memo
+            end
+        )
+
+        attributes(*attribute_options)
+      end
+
+      private
+
+      def method_name_from_association(association)
+        association.to_s.singularize + '_ids'
+      end
+
       def link_delegations_to_object(delegated_attrs)
         @_override_methods ||= {}
 
@@ -185,8 +213,6 @@ module Tint
           end
         end
       end
-
-      private
 
       def expand_schema(schema)
         if schema.kind_of?(Hash)

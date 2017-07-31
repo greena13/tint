@@ -1,9 +1,5 @@
 module Tint
   module JsonConversion
-    def to_json(options={})
-      as_json.to_json(options)
-    end
-
     def as_json(options={})
       attributes_for_json
     end
@@ -44,6 +40,10 @@ module Tint
       end
     end
 
+    def remove_js_unsafe_chars(string)
+      string.gsub(/[\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/, '')
+    end
+
     def attributes_for_json
       attribute_list = self.class._attributes
       override_methods = self.class._override_methods
@@ -74,7 +74,8 @@ module Tint
           end
 
         unless value.nil?
-          memo[strategy.transform(key)] = value.respond_to?(:as_json) ? value.as_json : value
+          json_value = value.respond_to?(:as_json) ? value.as_json : value
+          memo[strategy.transform(key)] = json_value.kind_of?(String) ? remove_js_unsafe_chars(json_value) : value
         end
 
         memo

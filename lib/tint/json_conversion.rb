@@ -75,7 +75,8 @@ module Tint
 
         unless value.nil?
           json_value = value.respond_to?(:as_json) ? value.as_json : value
-          memo[strategy.transform(key)] = json_value.kind_of?(String) ? remove_js_unsafe_chars(json_value) : value
+
+          memo[strategy.transform(key)] = json_value.kind_of?(String) ? remove_js_unsafe_chars(json_value) : json_value
         end
 
         memo

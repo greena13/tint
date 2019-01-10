@@ -121,7 +121,7 @@ module Tint
               end
         end
 
-        super(object, options)
+        super
       end
 
       def parent_eager_loads_include_own?(context = {})

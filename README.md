@@ -1,4 +1,7 @@
-# Tint
+<p align="center">
+  <img src="https://svgshare.com/i/CTW.svg" width="200px" /><br/>
+  <h2 align="center">Tint</h2>
+</p>
 
 Easily define object decorators for JSON APIs using simple declarative syntax
 
